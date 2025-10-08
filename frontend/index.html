@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASV Monitoring Dashboard - ATEROLAS</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Contrail+One&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #EFEEEA; --card-bg-color: #FFFFFF; --text-color: #273F4F;
+            --accent-color: #FE7743; --card-border: rgba(0, 0, 0, 0.1); --shadow-color: rgba(0, 0, 0, 0.1);
+            --status-green: #28a745; --status-red: #dc3545; --status-yellow: #ffc107;
+        }
+        body.dark-mode {
+            --bg-color: #000000; --card-bg-color: #273F4F; --text-color: #EFEEEA;
+            --card-border: rgba(254, 119, 67, 0.2); --shadow-color: rgba(254, 119, 67, 0.05);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Montserrat', sans-serif; background-color: var(--bg-color); color: var(--text-color);
+            display: grid; grid-template-rows: auto 1fr; height: 100vh; overflow: hidden;
+        }
+        .navbar { display: flex; justify-content: space-between; align-items: center; padding: 10px 25px; background-color: var(--card-bg-color); border-bottom: 1px solid var(--card-border); box-shadow: 0 2px 10px var(--shadow-color); z-index: 10; }
+        .navbar-left, .navbar-right { display: flex; align-items: center; gap: 15px; }
+        .navbar-left img { height: 40px; }
+        .navbar-center h1 { font-family: 'Contrail One', cursive; font-size: 2.2em; color: var(--accent-color); font-weight: 400; letter-spacing: 1px; }
+        .navbar-right .info-item { display: flex; align-items: center; gap: 8px; font-size: 0.9em; }
+        .navbar-right svg { fill: var(--text-color); width: 20px; height: 20px; }
+        #status-light { width: 12px; height: 12px; border-radius: 50%; transition: background-color 0.3s; }
+        .status-connected { background-color: var(--status-green); }
+        .status-disconnected { background-color: var(--status-red); }
+        .status-connecting { background-color: var(--status-yellow); animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7); } 70% { box-shadow: 0 0 0 8px rgba(255, 193, 7, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); } }
+        .main-content { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 20px; padding: 20px; overflow: hidden; }
+        .card { background-color: var(--card-bg-color); border-radius: 15px; border: 1px solid var(--card-border); box-shadow: 0 4px 20px var(--shadow-color); padding: 20px; display: flex; flex-direction: column; overflow: hidden; }
+        .card h2 { font-family: 'Contrail One', cursive; font-weight: 400; font-size: 1.5em; color: var(--accent-color); margin: 0; padding: 0; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 8px; flex-shrink: 0; }
+        .sensor-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
+        .sensor-item { background: var(--bg-color); padding: 8px; border-radius: 8px; text-align: center; border: 2px solid transparent; cursor: pointer; transition: all 0.2s ease-in-out; }
+        .sensor-item:hover { transform: translateY(-2px); box-shadow: 0 4px 10px var(--shadow-color); }
+        .sensor-item.active { border-color: var(--accent-color); background-color: var(--card-bg-color); }
+        .sensor-item .label { font-size: 0.8em; opacity: 0.7; font-weight: 600; }
+        .sensor-item .value { font-weight: 700; font-size: 1.2em; color: var(--accent-color); }
+        .chart-container { flex-grow: 1; position: relative; }
+        .card-general { display: flex; flex-direction: row; gap: 20px; }
+        .model-3d-container { flex-basis: 50%; background-color: rgba(0,0,0,0.05); border-radius: 10px; display: flex; justify-content: center; align-items: center; font-style: italic; opacity: 0.7; min-height: 150px; }
+        .ship-info { flex-basis: 50%; overflow-y: auto; }
+        .ship-info h3 { margin-top: 10px; font-weight: 600; }
+        .ship-info p { font-size: 0.9em; opacity: 0.8; line-height: 1.6; }
+        .card-cv-content { display: flex; flex-direction: row; gap: 20px; flex-grow: 1; min-height: 0; }
+        .cv-left { flex-basis: 60%; display: flex; flex-direction: column; gap: 15px; }
+        .video-stream { flex-grow: 1; background-color: #000; color: white; display: flex; justify-content: center; align-items: center; border-radius: 10px; overflow: hidden; position: relative; }
+        .video-stream img { width: 100%; height: 100%; object-fit: cover; }
+        #mission-status { position: absolute; bottom: 10px; left: 10px; background-color: rgba(0,0,0,0.7); color: white; padding: 5px 10px; border-radius: 5px; font-size: 0.9em; }
+        .cv-counters { display: flex; justify-content: space-around; text-align: center; background: var(--bg-color); padding: 8px; border-radius: 8px; }
+        .counter span { font-size: 1.2em; }
+        .counter div:first-of-type { font-size: 0.8em; font-weight: 600; opacity: 0.8; }
+        .counter .count { font-size: 1.2em; font-weight: bold; color: var(--accent-color); }
+        .cv-right { flex-basis: 40%; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .photo-thumbnail { background-color: rgba(0,0,0,0.1); border-radius: 8px; background-size: cover; background-position: center; border: 1px solid var(--card-border); }
+        .mission-controls { display: flex; gap: 8px; }
+        .mission-controls button { padding: 5px 12px; border: 2px solid var(--accent-color); background-color: transparent; color: var(--accent-color); border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 0.8em; transition: all 0.2s; }
+        .mission-controls button.active { background-color: var(--accent-color); color: var(--card-bg-color); }
+        .trajectory-controls { text-align: center; margin-bottom: 15px; flex-shrink: 0; }
+        .trajectory-controls button { padding: 8px 20px; border: 2px solid var(--accent-color); background-color: transparent; color: var(--accent-color); border-radius: 20px; cursor: pointer; margin: 0 5px; font-weight: bold; transition: all 0.2s; }
+        .trajectory-controls button.active { background-color: var(--accent-color); color: var(--card-bg-color); }
+        .trajectory-maps { flex-grow: 1; display: flex; gap: 20px; }
+        .map-container { flex-basis: 50%; border-radius: 10px; background-color: rgba(0,0,0,0.1); background-size: cover; background-position: center; }
+        #gmaps-container { background-image: url('https://i.imgur.com/3Z6K5h5.png'); }
+        #arena-container { background-image: url('https://i.imgur.com/rQ0oJc2.png'); }
+        .switch { position: relative; display: inline-block; width: 50px; height: 24px; }
+        .switch input { display: none; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--accent-color); }
+        input:checked + .slider:before { transform: translateX(26px); }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="navbar-left">
+            <img src="https://i.imgur.com/aC32a1f.png" alt="Logo Kapal">
+            <img src="https://i.imgur.com/s6t24as.png" alt="Logo Institusi">
+        </div>
+        <div class="navbar-center"><h1>ATEROLAS</h1></div>
+        <div class="navbar-right">
+            <div class="info-item"><span id="date"></span></div>
+            <div class="info-item"><span id="time"></span></div>
+            <div class="info-item">
+                <span id="status-light"></span>
+                <span id="status-text"></span>
+            </div>
+            <label class="switch"><input type="checkbox" id="nightModeToggle"><span class="slider"></span></label>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <div class="card card-general">
+            <div class="model-3d-container">3D Model Placeholder</div>
+            <div class="ship-info">
+                <div class="card-header"><h2>Informasi Umum</h2></div>
+                <h3>Sejarah & Inspirasi</h3>
+                <p>ATEROLAS adalah generasi keempat ASV yang dikembangkan dengan inspirasi dari keuletan Para Staffnya... HIDUP ATERKIA!</p>
+                <h3>Kegunaan Kapal</h3>
+                <p>Didesain untuk misi pengangkutan penumpang dan barang-barang tidak besar. Karena yang Maha Besar cuma Allah SWT.</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h2>Monitoring Sensor</h2></div>
+            <div class="sensor-grid">
+                <div class="sensor-item" data-sensor="roll"><div class="label">Roll</div><div id="roll-value" class="value">--°</div></div>
+                <div class="sensor-item" data-sensor="pitch"><div class="label">Pitch</div><div id="pitch-value" class="value">--°</div></div>
+                <div class="sensor-item" data-sensor="yaw"><div class="label">Yaw</div><div id="yaw-value" class="value">--°</div></div>
+                <div class="sensor-item" data-sensor="speed"><div class="label">Speed</div><div id="speed-value" class="value">-- m/s</div></div>
+                <div class="sensor-item" data-sensor="heading"><div class="label">Heading</div><div id="heading-value" class="value">--°</div></div>
+                <div class="sensor-item" data-sensor="voltage"><div class="label">Voltage</div><div id="voltage-value" class="value">-- V</div></div>
+            </div>
+            <div class="chart-container"><canvas id="sensorChart"></canvas></div>
+        </div>
+
+        <div class="card card-cv">
+            <div class="card-header">
+                <h2>Computer Vision</h2>
+                <div class="mission-controls">
+                    <button id="btn-idle" class="active">IDLE</button>
+                    <button id="btn-roi-nav">ROI</button>
+                    <button id="btn-box-snapshot">Snapshot</button>
+                </div>
+            </div>
+            <div class="card-cv-content">
+                <div class="cv-left">
+                    <div class="video-stream">
+                        <img id="video-feed" alt="Live video feed from vehicle">
+                        <div id="mission-status">Connecting...</div>
+                    </div>
+                    <div class="cv-counters">
+                        <div class="counter"><span style="color: red;">🔴</span><div>Buoy Merah</div><div id="buoy-red" class="count">0</div></div>
+                        <div class="counter"><span style="color: green;">🟢</span><div>Buoy Hijau</div><div id="buoy-green" class="count">0</div></div>
+                        <div class="counter"><span>🏁</span><div>Track</div><div id="track-num" class="count">0</div></div>
+                    </div>
+                </div>
+                <div id="image-gallery" class="cv-right"></div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header"><h2>Trajectory & Pemetaan</h2></div>
+            <div class="trajectory-controls">
+                <button id="btn-track-a" class="active">Lintasan A</button>
+                <button id="btn-track-b">Lintasan B</button>
+            </div>
+            <div class="trajectory-maps">
+                <div class="map-container" id="gmaps-container"></div>
+                <div class="map-container" id="arena-container"></div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const API_BASE_URL = "http://127.0.0.1:8000";
+        const WEBSOCKET_URI = "ws://127.0.0.1:8000/ws/frontend";
+        const MAX_DATA_POINTS = 50;
+        let ws;
+
+        const ui = {
+            time: document.getElementById('time'), date: document.getElementById('date'),
+            statusLight: document.getElementById('status-light'), statusText: document.getElementById('status-text'),
+            nightModeToggle: document.getElementById('nightModeToggle'),
+            location: document.getElementById('location'),
+            rollValue: document.getElementById('roll-value'), pitchValue: document.getElementById('pitch-value'), yawValue: document.getElementById('yaw-value'),
+            speed: document.getElementById('speed-value'), heading: document.getElementById('heading-value'), voltage: document.getElementById('voltage-value'),
+            imageGallery: document.getElementById('image-gallery'),
+            btnTrackA: document.getElementById('btn-track-a'), btnTrackB: document.getElementById('btn-track-b'),
+            videoFeed: document.getElementById('video-feed'), missionStatus: document.getElementById('mission-status'),
+            buoyRed: document.getElementById('buoy-red'), buoyGreen: document.getElementById('buoy-green'),
+        };
+
+        const sensorConfig = {
+            roll: { label: 'Roll (°)', color: '#FE7743' }, pitch: { label: 'Pitch (°)', color: '#4a90e2' },
+            yaw: { label: 'Yaw (°)', color: '#50E3C2' }, speed: { label: 'Speed (m/s)', color: '#f5a623' },
+            heading: { label: 'Heading (°)', color: '#bd10e0' }, voltage: { label: 'Voltage (V)', color: '#9013fe' }
+        };
+
+        let sensorHistory = { roll: [], pitch: [], yaw: [], speed: [], heading: [], voltage: [] };
+        let activeSensor = 'roll';
+
+        function updateTime() {
+            const now = new Date();
+            ui.time.textContent = now.toLocaleTimeString('en-GB');
+            ui.date.textContent = now.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+        setInterval(updateTime, 1000); updateTime();
+        
+        ui.nightModeToggle.addEventListener('change', () => document.body.classList.toggle('dark-mode'));
+        ui.btnTrackA.addEventListener('click', () => { ui.btnTrackA.classList.add('active'); ui.btnTrackB.classList.remove('active'); });
+        ui.btnTrackB.addEventListener('click', () => { ui.btnTrackB.classList.add('active'); ui.btnTrackA.classList.remove('active'); });
+
+        const ctx = document.getElementById('sensorChart').getContext('2d');
+        const sensorChart = new Chart(ctx, {
+            type: 'line', data: { labels: Array(MAX_DATA_POINTS).fill(''),
+            datasets: [{
+                label: sensorConfig[activeSensor].label, data: [],
+                borderColor: sensorConfig[activeSensor].color, tension: 0.3, borderWidth: 2, pointRadius: 0, fill: true,
+            }]},
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false, ticks: { color: 'var(--text-color)' }, grid: { color: 'rgba(128,128,128,0.2)' } }, x: { display: false } },
+            plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-color)', boxWidth: 12, font: { family: "'Montserrat', sans-serif" }}}}}
+        });
+
+        function setActiveSensor(sensorKey) {
+            if (!sensorKey || activeSensor === sensorKey) return;
+            activeSensor = sensorKey;
+            const config = sensorConfig[sensorKey];
+            sensorChart.data.datasets[0].data = sensorHistory[sensorKey];
+            sensorChart.data.datasets[0].label = config.label;
+            sensorChart.data.datasets[0].borderColor = config.color;
+            document.querySelectorAll('.sensor-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.dataset.sensor === sensorKey) item.classList.add('active');
+            });
+            sensorChart.update();
+        }
+        
+        function updateConnectionStatus(status) {
+            if (status === 'connected') {
+                ui.statusLight.className = 'status-connected';
+                ui.statusText.textContent = 'Connected';
+            } else if (status === 'disconnected') {
+                ui.statusLight.className = 'status-disconnected';
+                ui.statusText.textContent = 'Disconnected';
+            } else {
+                ui.statusLight.className = 'status-connecting';
+                ui.statusText.textContent = 'Connecting...';
+            }
+        }
+
+        function connectWebSocket() {
+            updateConnectionStatus('connecting');
+            ws = new WebSocket(WEBSOCKET_URI);
+            ws.onopen = () => updateConnectionStatus('connected');
+            ws.onclose = () => { updateConnectionStatus('disconnected'); setTimeout(connectWebSocket, 3000); };
+            ws.onerror = () => ws.close();
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'telemetry') {
+                        updateTelemetryUI(msg.data);
+                    } else if (msg.type === 'vision_update') {
+                        ui.missionStatus.textContent = msg.status;
+                        ui.videoFeed.src = `data:image/jpeg;base64,${hexToBase64(msg.frame)}`;
+                        const extraData = msg.extra_data || {};
+                        ui.buoyRed.textContent = extraData.red_buoys ?? 0;
+                        ui.buoyGreen.textContent = extraData.green_buoys ?? 0;
+                    }
+                } catch (e) { console.error("Error processing message:", e); }
+            };
+        }
+
+        function updateTelemetryUI(data) {
+            const allData = {
+                roll: data.roll ? (data.roll * 180 / Math.PI).toFixed(1) : null, pitch: data.pitch ? (data.pitch * 180 / Math.PI).toFixed(1) : null,
+                yaw: data.yaw ? (data.yaw * 180 / Math.PI).toFixed(1) : null, speed: data.groundspeed ? data.groundspeed.toFixed(2) : null,
+                heading: data.heading ? data.heading : null, voltage: data.voltage ? data.voltage.toFixed(2) : null
+            };
+            ui.rollValue.textContent = allData.roll !== null ? `${allData.roll}°` : '--°';
+            ui.pitchValue.textContent = allData.pitch !== null ? `${allData.pitch}°` : '--°';
+            ui.yawValue.textContent = allData.yaw !== null ? `${allData.yaw}°` : '--°';
+            if(ui.location) ui.location.textContent = (data.lat && data.lon) ? `${data.lat.toFixed(5)}, ${data.lon.toFixed(5)}` : '--,--';
+            ui.speed.textContent = allData.speed !== null ? `${allData.speed} m/s` : '-- m/s';
+            ui.voltage.textContent = allData.voltage !== null ? `${allData.voltage} V` : '-- V';
+            ui.heading.textContent = allData.heading !== null ? `${allData.heading}°` : '--°';
+            for (const key in sensorHistory) {
+                const history = sensorHistory[key];
+                const value = allData[key] !== null ? parseFloat(allData[key]) : null;
+                history.push(value);
+                if (history.length > MAX_DATA_POINTS) history.shift();
+            }
+            sensorChart.update('quiet');
+        }
+        
+        function hexToBase64(hex) { return btoa(hex.match(/\w{2}/g).map(a => String.fromCharCode(parseInt(a, 16))).join("")); }
+
+        async function fetchAndUpdateImages() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/images/latest`);
+                const data = await response.json();
+                ui.imageGallery.innerHTML = '';
+                if (data.images && data.images.length > 0) {
+                    data.images.forEach(filename => {
+                        const thumb = document.createElement('div');
+                        thumb.className = 'photo-thumbnail';
+                        thumb.style.backgroundImage = `url('${API_BASE_URL}/uploads/${filename}')`;
+                        ui.imageGallery.appendChild(thumb);
+                    });
+                } else {
+                     ui.imageGallery.innerHTML = '<p style="grid-column: span 2; text-align: center; opacity: 0.5;">Belum ada foto.</p>';
+                }
+            } catch (error) { console.error("Gagal memuat gambar:", error); }
+        }
+        
+        document.querySelectorAll('.sensor-item').forEach(item => {
+            item.addEventListener('click', () => setActiveSensor(item.dataset.sensor));
+        });
+        
+        document.querySelectorAll('.mission-controls button').forEach(button => {
+            button.addEventListener('click', () => {
+                document.querySelectorAll('.mission-controls button').forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                const mode = button.id.replace('btn-', '').replace(/-/g,'_').toUpperCase();
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ command: "set_mode", mode: mode }));
+                    console.log(`Perintah dikirim: set mode to ${mode}`);
+                }
+            });
+        });
+        
+        connectWebSocket();
+        fetchAndUpdateImages();
+        setActiveSensor('roll');
+        setInterval(fetchAndUpdateImages, 5000);
+    });
+    </script>
+</body>
+</html>

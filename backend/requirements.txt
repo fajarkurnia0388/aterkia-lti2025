@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+psycopg2
+pymavlink
+websockets
+ultralytics
+opencv-python
+typing
+datetime
+os
+shutil
+json
+
